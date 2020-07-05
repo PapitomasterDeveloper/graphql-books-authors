@@ -4,7 +4,10 @@ const expressGraphQL = require('express-graphql');
 const {
 	GraphQLSchema,
 	GraphQLObjectType,
-	GraphQLString
+	GraphQLString,
+	GraphQLList,
+	GraphQLInt,
+	GraphQLNonNull
 } = require('graphql');
 
 const authors = [
@@ -24,16 +27,94 @@ const books = [
 	{ id: 8, name: 'Beyond the Shadows', authorId: 3 }
 ]
 
-const schema = new GraphQLSchema({
-	query: new GraphQLObjectType({
-		name: 'HelloWorld',
-		fields: () => ({
-			message: {
-				type: GraphQLString,
-				resolve: () => 'Hello World'
+// Type Author with the pertinent fields that must have
+// The type of a single object type is just an entity
+// Unless there is crossing relationships between types, the logic will be applied just in that specific case
+const AuthorType = new GraphQLObjectType({
+        name: 'Author',
+        description: 'This represents a author of a book',
+        fields: () => ({
+                id: { type: GraphQLNonNull(GraphQLInt) },
+                name: { type: GraphQLNonNull(GraphQLString) },
+		books: {
+			type: new GraphQLList(BookType),
+			resolve: (author) => {
+				return books.filter(book => book.authorId === author.id)
 			}
-		})
+		}
+        })
+});
+
+// Type Book with the pertinent fields that must have
+// The type of a single object type is just an entity
+// Unless there is crossing relationships between types, the logic will be applied just in that specific case
+const BookType = new GraphQLObjectType({
+	name: 'Book',
+	description: 'This represents a book written by an author',
+	fields: () => ({
+		id: { type: GraphQLNonNull(GraphQLInt) },
+		name: { type: GraphQLNonNull(GraphQLString) },
+		authorId: { type: GraphQLNonNull(GraphQLInt) },
+		author: {
+			type: AuthorType,
+			resolve: (book) => {
+				return authors.find(author => author.id === book.authorId)
+			}
+		}
 	})
+});
+
+// This will be like the HTTP VERBS
+// The books fields will be like a GET verb, indicating the type to resolve and how is being done
+const RootQueryType = new GraphQLObjectType({
+	name: 'Query',
+	description: 'Root Query',
+	fields: () => ({
+		book: {
+			type: BookType,
+			description: 'A Single Book',
+			args: {
+				id: { type: GraphQLInt }
+			},
+			resolve: (parent, args) => books.find(book => book.id === args.id)
+		},
+		books: {
+			type: new GraphQLList(BookType),
+			description: 'List of All Books',
+			resolve: () => books
+		},
+		author: {
+			type: AuthorType,
+			description: 'A single Author',
+			args: {
+				id: { type: GraphQLInt }
+			},
+			resolve: (parent, args) => authors.find(author => author.id === args.id)
+		},
+		authors: {
+			type: new GraphQLList(AuthorType),
+			description: 'List of All Authors',
+			resolve: () => authors
+		}
+	})
+})
+
+/*
+const schema = new GraphQLSchema({
+        query: new GraphQLObjectType({
+                name: 'HelloWorld',
+                fields: () => ({
+                        message: {
+                                type: GraphQLString,
+                                resolve: () => 'Hello World'
+                        }
+                })
+        })
+});
+*/
+
+const schema = new GraphQLSchema({
+	query: RootQueryType
 });
 
 app.use('/graphql', expressGraphQL({
